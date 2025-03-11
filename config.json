@@ -1,0 +1,4 @@
+{
+    "disableWebhooks": true,
+    "imageConfigFile": "./config/manager/image_config.yaml"
+}
