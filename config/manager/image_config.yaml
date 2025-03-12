@@ -3,7 +3,7 @@ kind: ImageConfig
 metadata:
   name: image-config
 images:
-  system-logger: "k8ssandra/system-logger:v1.24.0-dev.a8fa96c-20241219"
+  system-logger: "k8ssandra/system-logger:v1.23.0" # this has an arm build
   config-builder: "datastax/cass-config-builder:1.0-ubi8"
   k8ssandra-client: "k8ssandra/k8ssandra-client:v0.6.0"
   # cassandra:
