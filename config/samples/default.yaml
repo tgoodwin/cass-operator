@@ -2,22 +2,21 @@ apiVersion: cassandra.datastax.com/v1beta1
 kind: CassandraDatacenter
 metadata:
   name: dc1
-  namespace: tracey
 spec:
   clusterName: development
   serverType: cassandra
   serverVersion: "4.1.2"
   managementApiAuth:
     insecure: {}
-  size: 1
+  size: 3
   storageConfig:
       cassandraDataVolumeClaimSpec:
-        storageClassName: standard
+        storageClassName: server-storage
         accessModes:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 0Gi
+            storage: 1Gi
   podTemplateSpec:
     spec:
       containers:

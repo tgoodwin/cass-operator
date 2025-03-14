@@ -50,6 +50,7 @@ import (
 	apiwebhook "github.com/k8ssandra/cass-operator/internal/webhooks/cassandra/v1beta1"
 	"github.com/k8ssandra/cass-operator/pkg/images"
 	"github.com/k8ssandra/cass-operator/pkg/utils"
+	"github.com/tgoodwin/sleeve"
 )
 
 var (
@@ -184,7 +185,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	if err = (&controllers.CassandraDatacenterReconciler{
-		Client:   mgr.GetClient(),
+		Client:   sleeve.Wrap(mgr.GetClient(), "CassandraDatacenter"),
 		Log:      ctrl.Log.WithName("controllers").WithName("CassandraDatacenter"),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("cass-operator"),
@@ -200,7 +201,7 @@ func main() {
 		}
 	}
 	if err = (&controlcontrollers.CassandraTaskReconciler{
-		Client: mgr.GetClient(),
+		Client: sleeve.Wrap(mgr.GetClient(), "CassandraTask"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CassandraTask")

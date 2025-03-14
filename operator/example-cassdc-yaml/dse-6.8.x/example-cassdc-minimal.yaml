@@ -11,6 +11,7 @@ spec:
   managementApiAuth:
     insecure: {}
   size: 3
+  allowMultipleNodesPerWorker: true
   storageConfig:
     cassandraDataVolumeClaimSpec:
       storageClassName: server-storage
@@ -18,7 +19,7 @@ spec:
         - ReadWriteOnce
       resources:
         requests:
-          storage: 5Gi
+          storage: 1Gi
   config:
     jvm-server-options:
       initial_heap_size: "800M"
