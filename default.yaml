@@ -2,7 +2,7 @@ apiVersion: cassandra.datastax.com/v1beta1
 kind: CassandraDatacenter
 metadata:
   name: sample-dc
-  namespace: tracey
+  namespace: default
 spec:
   clusterName: sleevecdc
   serverType: cassandra
