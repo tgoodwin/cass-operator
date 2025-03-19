@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -34,19 +35,22 @@ import (
 	"github.com/tgoodwin/sleeve/pkg/event"
 	"github.com/tgoodwin/sleeve/pkg/tracecheck"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	api "github.com/k8ssandra/cass-operator/apis/cassandra/v1beta1"
 	configv1beta1 "github.com/k8ssandra/cass-operator/apis/config/v1beta1"
 	controlv1alpha1 "github.com/k8ssandra/cass-operator/apis/control/v1alpha1"
 	controllers "github.com/k8ssandra/cass-operator/internal/controllers/cassandra"
+	"github.com/k8ssandra/cass-operator/pkg/images"
 )
 
 var (
-	scheme = runtime.NewScheme()
-	// setupLog = ctrl.Log.WithName("setup")
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -63,7 +67,31 @@ func main() {
 	searchDepth := flag.Int("search-depth", 3, "search depth")
 	outDir := flag.String("out-dir", "out", "output directory")
 
+	var configFile string
+	flag.StringVar(&configFile, "config", "",
+		"The cass-operator will load its configuration from this file. "+
+			"Omit this flag to use the default configuration values. ")
 	flag.Parse()
+
+	operConfig := &configv1beta1.OperatorConfig{}
+	if configFile != "" {
+		var err error
+		operConfig, err = readOperConfig(configFile)
+		if err != nil {
+			setupLog.Error(err, "unable to load the config file")
+			os.Exit(1)
+		}
+	}
+
+	if operConfig.ImageConfigFile == "" {
+		operConfig.ImageConfigFile = "/configs/image_config.yaml"
+	}
+
+	err := images.ParseImageConfig(operConfig.ImageConfigFile)
+	if err != nil {
+		setupLog.Error(err, "unable to load the image config file")
+		os.Exit(1)
+	}
 
 	// sleeve stuff
 	eb := tracecheck.NewExplorerBuilder(scheme)
@@ -178,4 +206,23 @@ func main() {
 
 	resultWriter := tracecheck.NewResultWriter(emitter)
 	resultWriter.MaterializeClassified(classified, *outDir)
+}
+func readOperConfig(configFile string) (*configv1beta1.OperatorConfig, error) {
+	operConfig := &configv1beta1.OperatorConfig{}
+	_, err := os.Stat(configFile)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, err
+	}
+
+	codecs := serializer.NewCodecFactory(scheme)
+	if err := runtime.DecodeInto(codecs.UniversalDecoder(), content, operConfig); err != nil {
+		return nil, fmt.Errorf("could not decode file into runtime.Object: %v", err)
+	}
+
+	return operConfig, nil
 }
