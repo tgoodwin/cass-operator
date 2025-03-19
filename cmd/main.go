@@ -27,6 +27,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -176,7 +177,12 @@ func main() {
 		options.Cache.DefaultNamespaces[ns] = cache.Config{}
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	cfg := ctrl.GetConfigOrDie()
+	cfg.Impersonate = rest.ImpersonationConfig{
+		UserName: "sleeve:controller-user",
+		Groups:   []string{"system:masters"},
+	}
+	mgr, err := ctrl.NewManager(cfg, options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)

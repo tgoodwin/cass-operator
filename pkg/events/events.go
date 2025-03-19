@@ -49,7 +49,7 @@ func (r *LoggingEventRecorder) Event(object runtime.Object, eventtype, reason, m
 
 func (r *LoggingEventRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
 	r.ReqLogger.Info(fmt.Sprintf(messageFmt, args...), "reason", reason, "eventType", eventtype)
-	r.EventRecorder.Eventf(object, eventtype, reason, messageFmt, args...)
+	// r.EventRecorder.Eventf(object, eventtype, reason, messageFmt, args...)
 }
 
 func (r *LoggingEventRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
