@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -87,6 +88,7 @@ type CassandraDatacenterReconciler struct {
 // See: https://godoc.org/sigs.k8s.io/controller-runtime/pkg/reconcile#Result
 func (r *CassandraDatacenterReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	startReconcile := time.Now()
+	fmt.Println("in reconcile")
 
 	logger := r.Log.
 		WithValues("cassandradatacenter", request.NamespacedName).
@@ -122,6 +124,7 @@ func (r *CassandraDatacenterReconciler) Reconcile(ctx context.Context, request c
 	}
 
 	if err := rc.IsValid(rc.Datacenter); err != nil {
+		fmt.Println("CassandraDatacenter resource is invalid")
 		logger.Error(err, "CassandraDatacenter resource is invalid")
 		rc.Recorder.Eventf(rc.Datacenter, "Warning", "ValidationFailed", err.Error())
 		return ctrl.Result{}, reconcile.TerminalError(err)

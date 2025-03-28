@@ -27,14 +27,19 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 	if rc.Datacenter.GetDeletionTimestamp() == nil {
 		return result.Continue()
 	}
+	fmt.Println("encountered non-nil deletion timestamp")
 
 	// If finalizer was removed, we will not do our finalizer processes
 	if !controllerutil.ContainsFinalizer(rc.Datacenter, api.Finalizer) {
+		fmt.Println("does not contain finalizer")
 		return result.Done()
 	}
+	fmt.Println("contains finalizer")
 
 	// set the label here but no need to remove since we're deleting the CassandraDatacenter
 	if err := setOperatorProgressStatus(rc, api.ProgressUpdating); err != nil {
+		fmt.Println("error setting operator progress status")
+		panic("shit")
 		return result.Error(err)
 	}
 
@@ -47,12 +52,14 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 		// ScalingDown is still happening
 		rc.Recorder.Eventf(rc.Datacenter, corev1.EventTypeNormal, events.DecommissionDatacenter, "Datacenter is decommissioning")
 		rc.ReqLogger.V(1).Info("Waiting for the decommission to complete first, before deleting")
+		fmt.Println("waiting for decommission to complete")
 		return result.Continue()
 	}
 
 	if _, found := rc.Datacenter.Annotations[api.DecommissionOnDeleteAnnotation]; found {
 		dcPods, err := rc.listPods(rc.Datacenter.GetDatacenterLabels())
 		if err != nil {
+			fmt.Println("failed to list pods")
 			rc.ReqLogger.Error(err, "Failed to list pods, unable to proceed with deletion")
 			return result.Error(err)
 		}
@@ -81,6 +88,7 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 		// This is small mini reconcile to make everything 0 sized before we finish deletion, but do not run decommission in Cassandra
 		rc.ReqLogger.Info("Proceeding with deletion, setting all StatefulSets to 0 replicas")
 		if err := rc.CalculateRackInformation(); err != nil {
+			panic("shit error calculating rack info")
 			return result.Error(err)
 		}
 
@@ -92,6 +100,7 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 					err,
 					"Could not locate statefulSet for",
 					"Rack", rackInfo.RackName)
+				panic("couldnt locate statefulset for rack")
 				return result.Error(err)
 			}
 
@@ -106,18 +115,20 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 			}
 		}
 		if waitingForRackScale {
+			rc.ReqLogger.Info("Waiting for rack scale!")
 			return result.RequeueSoon(5)
 		}
 	}
 
 	// Clean up annotation litter on the user Secrets
-	err := rc.SecretWatches.RemoveWatcher(types.NamespacedName{
-		Name: rc.Datacenter.GetName(), Namespace: rc.Datacenter.GetNamespace()})
+	// // err := rc.SecretWatches.RemoveWatcher(types.NamespacedName{
+	// // 	Name: rc.Datacenter.GetName(), Namespace: rc.Datacenter.GetNamespace()})
 
-	if err != nil {
-		rc.ReqLogger.Error(err, "Failed to remove dynamic secret watches for CassandraDatacenter")
-	}
+	// if err != nil {
+	// 	rc.ReqLogger.Error(err, "Failed to remove dynamic secret watches for CassandraDatacenter")
+	// }
 
+	fmt.Println("about to delete PVCs")
 	if err := rc.deletePVCs(); err != nil {
 		rc.ReqLogger.Error(err, "Failed to delete PVCs for CassandraDatacenter")
 		return result.Error(err)
@@ -128,7 +139,9 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 	rc.Datacenter.Spec.Size = origSize // Has to be set to original size, since 0 isn't allowed for the Update to succeed
 
 	// Update CassandraDatacenter
+	rc.ReqLogger.Info("Removing Finalizer for the CassandraDatacenter")
 	if err := rc.Client.Update(rc.Ctx, rc.Datacenter); err != nil {
+		rc.ReqLogger.Error(err, "Failed to set finalizers to nil")
 		return result.Error(err)
 	}
 
@@ -187,12 +200,14 @@ func (rc *ReconciliationContext) isBeingUsed(pvc corev1.PersistentVolumeClaim) (
 		rc.ReqLogger.Error(err, "error getting pods for pvc", "pvc", pvc.Name)
 		return false, err
 	}
+	rc.ReqLogger.Info("pods found", "numPods", len(pods.Items))
 
 	return len(pods.Items) > 0, nil
 }
 
 func (rc *ReconciliationContext) listPVCs(selector map[string]string) ([]corev1.PersistentVolumeClaim, error) {
 	rc.ReqLogger.Info("reconciler::listPVCs")
+	fmt.Println("listing PVCs")
 
 	listOptions := &client.ListOptions{
 		Namespace:     rc.Datacenter.Namespace,

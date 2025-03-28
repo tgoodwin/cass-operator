@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -34,6 +35,8 @@ import (
 	sleevectrl "github.com/tgoodwin/sleeve/controller-manager/pkg/controller"
 	"github.com/tgoodwin/sleeve/pkg/event"
 	"github.com/tgoodwin/sleeve/pkg/tracecheck"
+	"github.com/tgoodwin/sleeve/pkg/util"
+	sleevelog "github.com/tgoodwin/sleeve/pkg/util/logger"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
@@ -63,7 +66,7 @@ func init() {
 
 func main() {
 	logfile := flag.String("logfile", "app.log", "path to the log file")
-	stalenessDepth := flag.Int("staleness-depth", 1, "staleness depth")
+	// stalenessDepth := flag.Int("staleness-depth", 1, "staleness depth")
 	searchDepth := flag.Int("search-depth", 3, "search depth")
 	outDir := flag.String("out-dir", "out", "output directory")
 
@@ -72,6 +75,10 @@ func main() {
 		"The cass-operator will load its configuration from this file. "+
 			"Omit this flag to use the default configuration values. ")
 	flag.Parse()
+
+	logger := sleevelog.GetLogger(sleevelog.Debug)
+	// ctrl.SetLogger(logger)
+	tracecheck.SetLogger(logger)
 
 	operConfig := &configv1beta1.OperatorConfig{}
 	if configFile != "" {
@@ -96,18 +103,34 @@ func main() {
 	// sleeve stuff
 	eb := tracecheck.NewExplorerBuilder(scheme)
 	traces, err := eb.ParseJSONLTrace(*logfile)
-	for _, t := range traces {
-		if t.Kind == "Service" {
-			if t.Effect.Key.ResourceKey.Name == "sleevecdc-seed-service" {
-				fmt.Println("service found")
-				fmt.Println(t.Event.Labels)
-			}
-		}
-	}
 	if err != nil {
 		log.Fatalf("failed to parse JSONL trace: %v", err)
 	}
 	log.Printf("Parsed %d trace events", len(traces))
+
+	sort.Slice(traces, func(i, j int) bool {
+		return traces[i].Timestamp < traces[j].Timestamp
+	})
+
+	byKind := lo.GroupBy(traces, func(t tracecheck.StateEvent) string {
+		return t.Kind
+	})
+	for kind, traces := range byKind {
+		log.Printf("Kind: %s, count: %d", kind, len(traces))
+		byOpType := lo.GroupBy(traces, func(t tracecheck.StateEvent) string {
+			return t.OpType
+		})
+		for opType, traces := range byOpType {
+			log.Printf("  OpType: %s, count: %d", opType, len(traces))
+		}
+	}
+
+	for _, trace := range traces {
+		if !event.IsWriteOp(event.OperationType(trace.OpType)) {
+			continue
+		}
+		fmt.Printf("Timestamp: %s, Kind: %s, ObjectID: %s, %s:%s\n", trace.Timestamp, trace.Kind, util.Shorter(trace.ObjectID), trace.ControllerID, trace.OpType)
+	}
 
 	eb.WithReconciler("CassandraDatacenter", func(c tracecheck.Client) tracecheck.Reconciler {
 		return &controllers.CassandraDatacenterReconciler{
@@ -129,6 +152,7 @@ func main() {
 			Scheme: scheme,
 		}
 	})
+
 	eb.WithReconciler("PersistentVolumeClaimController", func(c tracecheck.Client) tracecheck.Reconciler {
 		return &sleevectrl.PersistentVolumeClaimReconciler{
 			Client: c,
@@ -138,20 +162,20 @@ func main() {
 
 	eb.WithResourceDep("CassandraDatacenter", "CassandraDatacenter")
 	eb.WithResourceDep("StatefulSet", "CassandraDatacenter")
-	eb.WithResourceDep("PodDisruptionBudget", "CassandraDatacenter")
+	// eb.WithResourceDep("PodDisruptionBudget", "CassandraDatacenter")
 	eb.WithResourceDep("Service", "CassandraDatacenter")
-	eb.WithResourceDep("Secret", "CassandraDatacenter")
+	// eb.WithResourceDep("Secret", "CassandraDatacenter")
 
-	eb.WithResourceDep("StatefulSet", "StatefulSetController")
-	eb.WithResourceDep("PersistentVolumeClaim", "StatefulSetController")
-	eb.WithResourceDep("Pod", "StatefulSetController")
+	// eb.WithResourceDep("StatefulSet", "StatefulSetController")
+	// eb.WithResourceDep("PersistentVolumeClaim", "StatefulSetController")
+	// eb.WithResourceDep("Pod", "StatefulSetController")
 
-	eb.WithResourceDep("Service", "ServiceController")
-	eb.WithResourceDep("Endpoints", "ServiceController")
-	eb.WithResourceDep("Pod", "ServiceController")
+	// eb.WithResourceDep("Service", "ServiceController")
+	// eb.WithResourceDep("Endpoints", "ServiceController")
+	// eb.WithResourceDep("Pod", "ServiceController")
 
-	eb.WithResourceDep("PersistentVolumeClaim", "PersistentVolumeClaimController")
-	eb.WithResourceDep("PersistentVolume", "PersistentVolumeClaimController")
+	// eb.WithResourceDep("PersistentVolumeClaim", "PersistentVolumeClaimController")
+	// eb.WithResourceDep("PersistentVolume", "PersistentVolumeClaimController")
 
 	eb.AssignReconcilerToKind("CassandraDatacenter", "CassandraDatacenter")
 	eb.AssignReconcilerToKind("StatefulSetController", "StatefulSet")
@@ -160,8 +184,12 @@ func main() {
 
 	emitter := event.NewDebugEmitter()
 	eb.WithEmitter(emitter)
-	eb.WithStalenessDepth(*stalenessDepth) // Enable staleness exploration
-	eb.WithMaxDepth(*searchDepth)          // tuned this experimentally
+	// eb.WithStalenessDepth(*stalenessDepth) // Enable staleness exploration
+	eb.WithMaxDepth(*searchDepth) // tuned this experimentally
+	// eb.WithKindBounds("CassandraDatacenter", tracecheck.ReconcilerConfig{
+	// 	Bounds:      tracecheck.LookbackLimits{"CassandraDatacenter": 10},
+	// 	MaxRestarts: 1,
+	// })
 
 	explorer, err := eb.Build("standalone")
 	if err != nil {
@@ -169,8 +197,16 @@ func main() {
 	}
 
 	rollup := tracecheck.Rollup(traces)
+	rollup.Debug()
+
+	fmt.Println("stale view")
+	fixed := rollup.FixAt(tracecheck.KindSequences{
+		"CassandraDatacenter": 40,
+	})
+	fixed.Debug()
+
 	topState := tracecheck.StateNode{
-		Contents: *rollup,
+		Contents: fixed,
 		PendingReconciles: []tracecheck.PendingReconcile{
 			{
 				ReconcilerID: "CassandraDatacenter",

@@ -80,6 +80,9 @@ func CreateReconciliationContext(
 	}
 	rc.Datacenter = dc
 
+	deletionTS := dc.GetDeletionTimestamp()
+	fmt.Println("deletionTS: ", deletionTS)
+
 	// workaround for kubernetes having problems with zero-value and nil Times
 	if rc.Datacenter.Status.SuperUserUpserted.IsZero() {
 		rc.Datacenter.Status.SuperUserUpserted = metav1.Unix(1, 0)

@@ -206,6 +206,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
 	if err = (&controlcontrollers.CassandraTaskReconciler{
 		Client: sleeve.Wrap(mgr.GetClient(), "CassandraTask"),
 		Scheme: mgr.GetScheme(),
