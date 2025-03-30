@@ -175,7 +175,7 @@ func main() {
 	// eb.WithResourceDep("Pod", "ServiceController")
 
 	// eb.WithResourceDep("PersistentVolumeClaim", "PersistentVolumeClaimController")
-	// eb.WithResourceDep("PersistentVolume", "PersistentVolumeClaimController")
+	eb.WithResourceDep("PersistentVolume", "PersistentVolumeClaimController")
 
 	eb.AssignReconcilerToKind("CassandraDatacenter", "CassandraDatacenter")
 	eb.AssignReconcilerToKind("StatefulSetController", "StatefulSet")
@@ -186,10 +186,12 @@ func main() {
 	eb.WithEmitter(emitter)
 	// eb.WithStalenessDepth(*stalenessDepth) // Enable staleness exploration
 	eb.WithMaxDepth(*searchDepth) // tuned this experimentally
-	// eb.WithKindBounds("CassandraDatacenter", tracecheck.ReconcilerConfig{
-	// 	Bounds:      tracecheck.LookbackLimits{"CassandraDatacenter": 10},
-	// 	MaxRestarts: 1,
-	// })
+	eb.WithKindBounds("CassandraDatacenter", tracecheck.ReconcilerConfig{
+		Bounds:      tracecheck.LookbackLimits{"CassandraDatacenter": 10},
+		MaxRestarts: 1,
+	})
+
+	// eb.BreakEarly()
 
 	explorer, err := eb.Build("standalone")
 	if err != nil {
