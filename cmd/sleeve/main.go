@@ -68,6 +68,7 @@ func main() {
 	logfile := flag.String("logfile", "app.log", "path to the log file")
 	searchDepth := flag.Int("search-depth", 3, "search depth")
 	outDir := flag.String("out-dir", "out", "output directory")
+	breakEarly := flag.Bool("break-early", false, "break early")
 
 	var configFile string
 	flag.StringVar(&configFile, "config", "",
@@ -189,7 +190,9 @@ func main() {
 		MaxRestarts: 1,
 	})
 
-	eb.BreakEarly()
+	if *breakEarly {
+		eb.BreakEarly()
+	}
 
 	explorer, err := eb.Build("standalone")
 	if err != nil {
