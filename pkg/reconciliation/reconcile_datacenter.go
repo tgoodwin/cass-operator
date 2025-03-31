@@ -39,7 +39,6 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 	// set the label here but no need to remove since we're deleting the CassandraDatacenter
 	if err := setOperatorProgressStatus(rc, api.ProgressUpdating); err != nil {
 		fmt.Println("error setting operator progress status")
-		panic("shit")
 		return result.Error(err)
 	}
 
@@ -88,7 +87,6 @@ func (rc *ReconciliationContext) ProcessDeletion() result.ReconcileResult {
 		// This is small mini reconcile to make everything 0 sized before we finish deletion, but do not run decommission in Cassandra
 		rc.ReqLogger.Info("Proceeding with deletion, setting all StatefulSets to 0 replicas")
 		if err := rc.CalculateRackInformation(); err != nil {
-			panic("shit error calculating rack info")
 			return result.Error(err)
 		}
 

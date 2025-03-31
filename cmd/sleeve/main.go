@@ -66,7 +66,6 @@ func init() {
 
 func main() {
 	logfile := flag.String("logfile", "app.log", "path to the log file")
-	// stalenessDepth := flag.Int("staleness-depth", 1, "staleness depth")
 	searchDepth := flag.Int("search-depth", 3, "search depth")
 	outDir := flag.String("out-dir", "out", "output directory")
 
@@ -76,8 +75,7 @@ func main() {
 			"Omit this flag to use the default configuration values. ")
 	flag.Parse()
 
-	logger := sleevelog.GetLogger(sleevelog.Debug)
-	// ctrl.SetLogger(logger)
+	logger := sleevelog.GetLogger(sleevelog.Trace)
 	tracecheck.SetLogger(logger)
 
 	operConfig := &configv1beta1.OperatorConfig{}
@@ -191,14 +189,14 @@ func main() {
 		MaxRestarts: 1,
 	})
 
-	// eb.BreakEarly()
+	eb.BreakEarly()
 
 	explorer, err := eb.Build("standalone")
 	if err != nil {
 		log.Fatalf("failed to build explorer: %v", err)
 	}
 
-	rollup := tracecheck.Rollup(traces)
+	rollup := tracecheck.CausalRollup(traces)
 	rollup.Debug()
 
 	fmt.Println("stale view")
