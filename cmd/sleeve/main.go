@@ -32,11 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/samber/lo"
-	sleevectrl "github.com/tgoodwin/sleeve/controller-manager/pkg/controller"
 	"github.com/tgoodwin/sleeve/pkg/event"
 	"github.com/tgoodwin/sleeve/pkg/tracecheck"
 	"github.com/tgoodwin/sleeve/pkg/util"
 	sleevelog "github.com/tgoodwin/sleeve/pkg/util/logger"
+	sleevectrl "github.com/tgoodwin/sleeve/sleevectrl/pkg/controller"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
