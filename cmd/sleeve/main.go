@@ -68,7 +68,6 @@ func main() {
 	logfile := flag.String("logfile", "app.log", "path to the log file")
 	searchDepth := flag.Int("search-depth", 3, "search depth")
 	outDir := flag.String("out-dir", "out", "output directory")
-	breakEarly := flag.Bool("break-early", false, "break early")
 
 	var configFile string
 	flag.StringVar(&configFile, "config", "",
@@ -161,19 +160,7 @@ func main() {
 
 	eb.WithResourceDep("CassandraDatacenter", "CassandraDatacenter")
 	eb.WithResourceDep("StatefulSet", "CassandraDatacenter")
-	// eb.WithResourceDep("PodDisruptionBudget", "CassandraDatacenter")
 	eb.WithResourceDep("Service", "CassandraDatacenter")
-	// eb.WithResourceDep("Secret", "CassandraDatacenter")
-
-	// eb.WithResourceDep("StatefulSet", "StatefulSetController")
-	// eb.WithResourceDep("PersistentVolumeClaim", "StatefulSetController")
-	// eb.WithResourceDep("Pod", "StatefulSetController")
-
-	// eb.WithResourceDep("Service", "ServiceController")
-	// eb.WithResourceDep("Endpoints", "ServiceController")
-	// eb.WithResourceDep("Pod", "ServiceController")
-
-	// eb.WithResourceDep("PersistentVolumeClaim", "PersistentVolumeClaimController")
 	eb.WithResourceDep("PersistentVolume", "PersistentVolumeClaimController")
 
 	eb.AssignReconcilerToKind("CassandraDatacenter", "CassandraDatacenter")
@@ -183,16 +170,26 @@ func main() {
 
 	emitter := event.NewDebugEmitter()
 	eb.WithEmitter(emitter)
-	// eb.WithStalenessDepth(*stalenessDepth) // Enable staleness exploration
-	eb.WithMaxDepth(*searchDepth) // tuned this experimentally
+	eb.WithMaxDepth(*searchDepth)
 	eb.WithKindBounds("CassandraDatacenter", tracecheck.ReconcilerConfig{
 		Bounds:      tracecheck.LookbackLimits{"CassandraDatacenter": 10},
 		MaxRestarts: 1,
 	})
 
-	if *breakEarly {
-		eb.BreakEarly()
-	}
+	pb := tracecheck.NewPriorityStrategyBuilder()
+	pb.AddStrategy(func(view *tracecheck.StateSnapshot) *tracecheck.StateSnapshot {
+		view.Priority = tracecheck.Skip
+		for _, obj := range view.Observable() {
+			if util.ShortenHash(obj.Value) == "2hquvmr5" {
+				view.Priority = tracecheck.High
+			}
+		}
+		return view
+	})
+	pb.AddFilterPred(func(view *tracecheck.StateSnapshot) bool {
+		return view.Priority == tracecheck.High
+	})
+	eb.WithPriorityStrategy(pb)
 
 	explorer, err := eb.Build("standalone")
 	if err != nil {
@@ -202,14 +199,8 @@ func main() {
 	rollup := tracecheck.CausalRollup(traces)
 	rollup.Debug()
 
-	fmt.Println("stale view")
-	fixed := rollup.FixAt(tracecheck.KindSequences{
-		"CassandraDatacenter": 40,
-	})
-	fixed.Debug()
-
 	topState := tracecheck.StateNode{
-		Contents: fixed,
+		Contents: *rollup,
 		PendingReconciles: []tracecheck.PendingReconcile{
 			{
 				ReconcilerID: "CassandraDatacenter",
