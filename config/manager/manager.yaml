@@ -64,5 +64,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: SLEEVE_MINIO_ENDPOINT
+          value: minio-svc.sleeve-system.svc.cluster.local:9000
+        - name: SLEEVE_MINIO_ACCESS_KEY
+          value: myaccesskey
+        - name: SLEEVE_MINIO_SECRET_KEY
+          value: mysecretkey
+        - name: SLEEVE_MINIO_BUCKET
+          value: sleeve
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
