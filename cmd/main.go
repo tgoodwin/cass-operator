@@ -178,9 +178,11 @@ func main() {
 	}
 
 	cfg := ctrl.GetConfigOrDie()
-	cfg.Impersonate = rest.ImpersonationConfig{
-		UserName: "sleeve:controller-user",
-		Groups:   []string{"system:masters"},
+	if _, present := os.LookupEnv("SLEEVE_LOCAL"); present {
+		cfg.Impersonate = rest.ImpersonationConfig{
+			UserName: "sleeve:controller-user",
+			Groups:   []string{"system:masters"},
+		}
 	}
 	mgr, err := ctrl.NewManager(cfg, options)
 	if err != nil {
