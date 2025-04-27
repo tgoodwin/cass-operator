@@ -14,4 +14,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: k8ssandra/cass-operator
-  newTag: v1.24.0-dev.536ab37-20250311
+  newTag: "1.24"

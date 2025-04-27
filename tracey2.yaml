@@ -1,0 +1,45 @@
+apiVersion: cassandra.datastax.com/v1beta1
+kind: CassandraDatacenter
+metadata:
+  name: sample-dc
+  namespace: tracey
+spec:
+  clusterName: sleevecdc
+  serverType: cassandra
+  serverVersion: "4.1.5"
+  managementApiAuth:
+    insecure: {}
+  racks:
+    - name: sample-rack
+  size: 3
+  allowMultipleNodesPerWorker: true # This setting triggers the resource requirement check
+
+  # --- ADDED RESOURCES SECTION ---
+  # Define CPU and Memory requests/limits for the Cassandra container
+  resources:
+    requests:
+      # How much resources Kubernetes should reserve for the pod (affects scheduling)
+      cpu: "500m"       # Request 0.5 CPU core
+      memory: "1Gi"     # Request 1 Gibibyte of RAM
+    limits:
+      # Maximum resources the pod can consume
+      cpu: "1000m"      # Limit usage to 1 CPU core (throttled if exceeds)
+      memory: "1500Mi"  # Limit usage to ~1.5 Gibibytes of RAM (OOMKilled if exceeds)
+  # --- END ADDED RESOURCES SECTION ---
+
+  storageConfig:
+    cassandraDataVolumeClaimSpec:
+      storageClassName: standard
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  config:
+    cassandra-yaml: {}
+      # authenticator: org.apache.cassandra.auth.PasswordAuthenticator
+      # authorizer: org.apache.cassandra.auth.CassandraAuthorizer
+      # role_manager: org.apache.cassandra.auth.CassandraRoleManager
+    jvm-server-options:
+      initial_heap_size: "800M"
+      max_heap_size: "800M" # Your memory limit (1500Mi) should be comfortably larger than this

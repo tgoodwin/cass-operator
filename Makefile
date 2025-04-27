@@ -12,8 +12,8 @@ VERSION := $(VERSION)-dev.$(COMMIT)-$(DATE)
 
 # TODO For daily pushes, create dev channel (k8ssandra bundle, not datastax) - or set these in the
 # .github
-# Or add --package and define k8ssandra/cass-operator and datastax/cass-operator? 
-DEFAULT_CHANNEL ?= "stable" 
+# Or add --package and define k8ssandra/cass-operator and datastax/cass-operator?
+DEFAULT_CHANNEL ?= "stable"
 CHANNELS ?= "stable"
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -71,7 +71,8 @@ ENVTEST_K8S_VERSION = 1.31.x
 
 # Logger image
 LOG_IMG_BASE ?= $(ORG)/system-logger
-LOG_IMG ?= $(LOG_IMG_BASE):v$(VERSION)
+# LOG_IMG ?= $(LOG_IMG_BASE):v$(VERSION)
+LOG_IMG ?= $(LOG_IMG_BASE):v1.23.0 # this one has an ARM build
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -210,7 +211,7 @@ uninstall: manifests ## Uninstall CRDs from the K8s cluster specified in ~/.kube
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image controller=k8ssandra/cass-operator:1.24
 	LOG_IMG=${LOG_IMG} yq eval -i '.images.system-logger = env(LOG_IMG)' config/manager/image_config.yaml
 	kubectl apply --force-conflicts --server-side -k config/deployments/cluster
 

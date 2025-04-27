@@ -22,6 +22,12 @@ spec:
         name: cass-operator
         control-plane: controller-manager
     spec:
+      nodeSelector:
+        operator-node: "true"
+      tolerations:
+      - key: "dedicated"
+        operator: "Exists"
+        effect: "NoSchedule"
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -30,8 +36,8 @@ spec:
       - command:
         - /manager
         args:
-          - --leader-elect
           - --health-probe-bind-address=:8081
+          - ---metrics-bind-address=:8443
         image: controller:latest
         name: manager
         imagePullPolicy: IfNotPresent
