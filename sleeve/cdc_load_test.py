@@ -7,7 +7,7 @@ import string
 import sys
 import threading
 import time
-from queue import Queue, Empty
+# Removed queue import: from queue import Queue, Empty
 
 import yaml
 from kubernetes import client, config
@@ -16,6 +16,8 @@ from kubernetes.client.rest import ApiException
 # --- Configuration ---
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+LOAD_TEST_LABEL_KEY = "load-test" # Label key used to identify resources created by this script
+LOAD_TEST_LABEL_VALUE = "true"
 
 # --- Global Stop Signal ---
 stop_event = threading.Event()
@@ -33,7 +35,8 @@ def load_cdc_template(template_path):
         logging.error(f"Failed to load template file {template_path}: {e}")
         sys.exit(1)
 
-def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_names_queue):
+# Removed created_names_queue argument
+def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api):
     """
     Represents the lifecycle of operations performed by a single worker thread.
     Creates a CDC, waits, then deletes it. Repeats until stop_event is set.
@@ -46,13 +49,19 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
         resource_suffix = f"w{worker_id}-s{sequence}-{generate_random_suffix()}"
         cdc_name = f"loadtest-cdc-{resource_suffix}"
         cdc_body = cdc_template.copy() # Start with a fresh copy
+        # Ensure metadata exists
+        if 'metadata' not in cdc_body:
+            cdc_body['metadata'] = {}
         cdc_body['metadata']['name'] = cdc_name
         cdc_body['metadata']['namespace'] = args.namespace
-        # Ensure labels exist
+        # Ensure labels exist and add the load test label
         if 'labels' not in cdc_body['metadata']:
              cdc_body['metadata']['labels'] = {}
-        cdc_body['metadata']['labels']['load-test-worker'] = str(worker_id)
-        cdc_body['metadata']['labels']['load-test-sequence'] = str(sequence)
+        # Add/overwrite the specific label for cleanup
+        cdc_body['metadata']['labels'][LOAD_TEST_LABEL_KEY] = LOAD_TEST_LABEL_VALUE
+        # Optional: Keep worker/sequence labels for debugging if needed
+        # cdc_body['metadata']['labels']['load-test-worker'] = str(worker_id)
+        # cdc_body['metadata']['labels']['load-test-sequence'] = str(sequence)
 
 
         created_successfully = False
@@ -66,7 +75,7 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
                 body=cdc_body,
             )
             created_successfully = True
-            created_names_queue.put(cdc_name) # Add to queue for potential cleanup
+            # Removed queue.put
             logging.info(f"Successfully CREATED CassandraDatacenter: {cdc_name}")
 
             # --- Wait Phase ---
@@ -77,13 +86,14 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
 
         except ApiException as e:
             logging.error(f"API Error creating {cdc_name}: {e.status} - {e.reason} - {e.body}")
-            # Don't try to delete if creation failed badly
             created_successfully = False
         except Exception as e:
             logging.error(f"Non-API Error creating {cdc_name}: {e}")
             created_successfully = False
         finally:
             # --- Delete Phase ---
+            # Delete is still attempted by the worker for immediate cleanup,
+            # but the final cleanup function provides the safety net.
             if created_successfully and not stop_event.is_set(): # Only delete if created and not stopping
                 try:
                     logging.info(f"Attempting to DELETE CassandraDatacenter: {cdc_name}")
@@ -95,10 +105,8 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
                         name=cdc_name,
                         body=client.V1DeleteOptions(propagation_policy='Background'), # Or 'Foreground' if needed
                     )
-                    # Note: Deletion is asynchronous. We don't wait for it here.
                     logging.info(f"Successfully initiated DELETE for CassandraDatacenter: {cdc_name}")
                 except ApiException as e:
-                    # Handle cases where it might already be deleting or gone
                     if e.status == 404:
                          logging.warning(f"CassandraDatacenter {cdc_name} already deleted.")
                     else:
@@ -106,7 +114,7 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
                 except Exception as e:
                     logging.error(f"Non-API Error deleting {cdc_name}: {e}")
             elif created_successfully and stop_event.is_set():
-                 logging.warning(f"Stop signal received, skipping delete for {cdc_name}. It will be cleaned up later.")
+                 logging.warning(f"Stop signal received, skipping delete for {cdc_name}. It will be cleaned up by final LIST.")
 
 
         sequence += 1
@@ -116,14 +124,32 @@ def worker_lifecycle(worker_id, args, cdc_template, custom_objects_api, created_
 
     logging.info("Worker finished")
 
-
-def cleanup_resources(custom_objects_api, args, created_names_queue):
-    """Attempts to delete any resources left over."""
-    logging.info("Starting final cleanup...")
+# Removed created_names_queue argument
+def cleanup_resources(custom_objects_api, args):
+    """Lists and deletes resources matching the load test label."""
+    logging.info(f"Starting final cleanup by LISTING resources with label '{LOAD_TEST_LABEL_KEY}={LOAD_TEST_LABEL_VALUE}'...")
     deleted_count = 0
-    while True:
-        try:
-            cdc_name = created_names_queue.get_nowait()
+    label_selector = f"{LOAD_TEST_LABEL_KEY}={LOAD_TEST_LABEL_VALUE}"
+
+    try:
+        # List all CDCs in the namespace with the specific label
+        res = custom_objects_api.list_namespaced_custom_object(
+            group=args.crd_group,
+            version=args.crd_version,
+            namespace=args.namespace,
+            plural=args.crd_plural,
+            label_selector=label_selector,
+        )
+
+        items = res.get('items', [])
+        logging.info(f"Found {len(items)} resource(s) matching label selector for cleanup.")
+
+        for item in items:
+            cdc_name = item.get('metadata', {}).get('name')
+            if not cdc_name:
+                logging.warning("Found item in list without a name, skipping.")
+                continue
+
             try:
                 logging.info(f"Cleanup: Attempting to DELETE CassandraDatacenter: {cdc_name}")
                 custom_objects_api.delete_namespaced_custom_object(
@@ -136,20 +162,22 @@ def cleanup_resources(custom_objects_api, args, created_names_queue):
                 )
                 deleted_count += 1
                 logging.info(f"Cleanup: Successfully initiated DELETE for CassandraDatacenter: {cdc_name}")
+                # Add a small delay between deletes if the API server gets overloaded
+                time.sleep(0.1)
             except ApiException as e:
                 if e.status == 404:
-                    logging.warning(f"Cleanup: CassandraDatacenter {cdc_name} already deleted.")
+                    logging.warning(f"Cleanup: CassandraDatacenter {cdc_name} already deleted (concurrently?).")
                 else:
                     logging.error(f"Cleanup: API Error deleting {cdc_name}: {e.status} - {e.reason}")
             except Exception as e:
                 logging.error(f"Cleanup: Non-API Error deleting {cdc_name}: {e}")
-        except Empty:
-            logging.info("Cleanup queue is empty.")
-            break
-        except Exception as e:
-            logging.error(f"Error during cleanup processing: {e}")
-            break # Avoid infinite loop on unexpected queue errors
-    logging.info(f"Final cleanup finished. Initiated delete for {deleted_count} resources.")
+
+    except ApiException as e:
+        logging.error(f"Cleanup: API Error LISTING resources: {e.status} - {e.reason}")
+    except Exception as e:
+        logging.error(f"Cleanup: Non-API Error LISTING resources: {e}")
+
+    logging.info(f"Final cleanup finished. Initiated delete for {deleted_count} resources found via LIST.")
 
 
 def main():
@@ -199,7 +227,7 @@ def main():
 
     # --- Start Workload ---
     threads = []
-    created_names_queue = Queue() # Thread-safe queue to track created resources for cleanup
+    # Removed created_names_queue
 
     logging.info(f"Starting workload generation: {args.workers} workers for {args.duration} seconds.")
     t_start_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
@@ -210,7 +238,8 @@ def main():
     for i in range(args.workers):
         thread = threading.Thread(
             target=worker_lifecycle,
-            args=(i, args, cdc_template, custom_objects_api, created_names_queue),
+            # Removed created_names_queue from args
+            args=(i, args, cdc_template, custom_objects_api),
             name=f"Worker-{i}",
             daemon=True # Allow main thread to exit even if workers are stuck (though we try to join)
         )
@@ -247,7 +276,8 @@ def main():
     logging.info("All worker threads signaled.")
 
     # --- Final Cleanup ---
-    cleanup_resources(custom_objects_api, args, created_names_queue)
+    # Call cleanup without the queue
+    cleanup_resources(custom_objects_api, args)
 
     logging.info("Workload generation script finished.")
     print(f"T_START={t_start_iso}")
@@ -256,4 +286,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
