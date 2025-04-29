@@ -14,6 +14,7 @@ spec:
   endpoints:
     - path: /metrics
       port: metrics # Ensure this is the name of the port that exposes HTTPS metrics
+      interval: 5s
       scheme: http
       # bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       # tlsConfig:
