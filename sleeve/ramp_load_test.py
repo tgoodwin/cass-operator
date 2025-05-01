@@ -110,14 +110,14 @@ def create_or_update_labeled_cdc(custom_api, namespace, cr_name, template_body):
         logging.debug(f"Resource {cr_name} already exists. Ensuring label is present.")
         # Use JSON Merge Patch for potentially simpler label updates if the key might not exist
         patch = {"metadata": {"labels": {LOAD_TEST_LABEL_KEY: LOAD_TEST_LABEL_VALUE}}}
+        # Rely on client library to set Content-Type for merge patch
         custom_api.patch_namespaced_custom_object(
             group=group,
             version=version,
             namespace=namespace,
             plural=plural,
             name=cr_name,
-            body=patch,
-            _content_type='application/merge-patch+json'
+            body=patch
         )
         return True
     except ApiException as e:
@@ -134,6 +134,7 @@ def create_or_update_labeled_cdc(custom_api, namespace, cr_name, template_body):
                  logging.error(f"Unexpected error creating pool resource {cr_name}: {create_e}")
                  return False
         else:
+            # Log other errors during GET or PATCH
             logging.error(f"Error checking/patching pool resource {cr_name}. Status: {e.status}, Reason: {e.reason}")
             return False
     except Exception as e:
@@ -143,7 +144,7 @@ def create_or_update_labeled_cdc(custom_api, namespace, cr_name, template_body):
 
 def update_cdc_worker(custom_api, namespace, cr_name, target_size, api_info):
     """
-    Worker function to patch the spec.size of a CassandraDatacenter CR.
+    Worker function to patch the spec.size of a CassandraDatacenter CR using JSON Merge Patch.
 
     Args:
         custom_api (client.CustomObjectsApi): Initialized K8s client.
@@ -155,29 +156,41 @@ def update_cdc_worker(custom_api, namespace, cr_name, target_size, api_info):
     Returns:
         bool: True if patch was successful, False otherwise.
     """
-    # JSON Patch format to update the size
-    patch = [{"op": "replace", "path": "/spec/size", "value": target_size}]
+    # --- Use JSON Merge Patch format ---
+    # This sends only the fields that need to be changed/added within their structure.
+    patch = {
+        "spec": {
+            "size": target_size
+        }
+    }
 
     try:
+        # Rely on client library to set Content-Type for merge patch (usually application/merge-patch+json)
         custom_api.patch_namespaced_custom_object(
             group=api_info['group'],
             version=api_info['version'],
             namespace=namespace,
             plural=api_info['plural'],
             name=cr_name,
-            body=patch,
-            _content_type='application/json-patch+json'
+            body=patch # Send the merge patch object
         )
-        # logging.debug(f"Successfully submitted patch for {cr_name} to size {target_size}")
+        # logging.debug(f"Successfully submitted merge patch for {cr_name} to size {target_size}")
         return True
     except ApiException as e:
         if e.status == 404:
             logging.warning(f"Cannot patch {cr_name}: Not Found (404). May have been deleted.")
         else:
-            logging.error(f"Failed to patch CR {cr_name}. Status: {e.status}, Reason: {e.reason}, Body: {e.body}")
+            # Log the body of the error for more details if available
+            error_body = e.body
+            try:
+                # Try to parse if it's JSON
+                error_details = json.loads(error_body)
+            except json.JSONDecodeError:
+                error_details = error_body # Keep as string if not JSON
+            logging.error(f"Failed to merge patch CR {cr_name}. Status: {e.status}, Reason: {e.reason}, Body: {error_details}")
         return False
     except Exception as e:
-        logging.error(f"Unexpected error patching CR {cr_name}: {e}")
+        logging.error(f"Unexpected error merge patching CR {cr_name}: {e}")
         return False
 
 
@@ -449,8 +462,6 @@ def main():
                 step_index=i,
                 phase_name="Warmup" # Pass phase name
             )
-            # Log count immediately after warm-up finishes
-            # logging.info(f"  Warm-up Phase Finished. Submitted {warmup_requests_submitted} requests.") # Already logged in run_load_phase
 
             # --- Measurement Phase ---
             measurement_t_start = time.time() # T_START is *after* warm-up
@@ -467,8 +478,6 @@ def main():
                 step_index=i,
                 phase_name="Measurement" # Pass phase name
             )
-            # Log count immediately after measurement finishes
-            # logging.info(f"  Measurement Phase Finished. Submitted {measurement_requests_submitted} requests.") # Already logged in run_load_phase
 
             # Calculate T_END based on the scheduled duration
             measurement_t_end = measurement_t_start + args.measurement_duration
