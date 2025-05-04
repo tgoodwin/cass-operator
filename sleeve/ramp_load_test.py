@@ -441,10 +441,9 @@ def main():
         # --- Save Results ---
         if all_results_data:
             try:
-                outfile = f'load_results_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-                with open(outfile, 'w') as f: json.dump(all_results_data, f, indent=4)
-                logging.info(f"Successfully saved results to {outfile}")
-            except Exception as e: logging.error(f"Failed to write results to {outfile}: {e}")
+                with open(args.output_json, 'w') as f: json.dump(all_results_data, f, indent=4)
+                logging.info(f"Successfully saved results to {args.output_json}")
+            except Exception as e: logging.error(f"Failed to write results to {args.output_json}: {e}")
 
         # --- Removed Plotting Call ---
 
