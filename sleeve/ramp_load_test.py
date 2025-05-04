@@ -17,10 +17,11 @@ from collections import deque # Used to track active resources efficiently
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from copy import deepcopy
+import uuid
 
 # --- Configuration ---
 DEFAULT_NAMESPACE = "default"
-DEFAULT_BASE_NAME = "loadtest-cdc" # Base name for created resources
+DEFAULT_BASE_NAME = "cdc" # Base name for created resources
 DEFAULT_RATES_GEOM = [2**i for i in range(8)] # 1, 2, ..., 128
 DEFAULT_MEASUREMENT_DURATION_S = 300 # 5 minutes
 DEFAULT_WARMUP_DURATION_S = 60 # 1 minute
@@ -75,6 +76,11 @@ def create_k8s_api_client():
     except Exception as e:
         logging.error(f"Error initializing Kubernetes client: {e}")
         return None, None
+
+def get_cdc_name(op_num):
+    """Generates a unique name for the CassandraDatacenter CR."""
+    random_slug = uuid.uuid4().hex[:8]
+    return f"{op_num}-{random_slug}"
 
 def create_cdc_worker(custom_api, namespace, cr_name, template_body, api_info):
     """Worker function to create a CassandraDatacenter CR with the load test label."""
@@ -198,7 +204,7 @@ def prefill_pool(custom_api, target_pool_size, namespace, base_name, template_bo
             futures = {}
             while created_count < target_pool_size:
                 # Simplified naming for pool items
-                cr_name = f"{base_name}-pool-{sequence}"
+                cr_name = get_cdc_name(sequence)
                 sequence += 1
                 if cr_name in attempted_names: continue
                 attempted_names.add(cr_name)
@@ -297,10 +303,7 @@ def run_load_phase(custom_api, rate, duration_s, namespace, base_name, template_
                 except Exception as e:
                     logging.error(f"Error submitting delete for {name_to_delete}: {e}")
             else:
-                # --- Dispatch Create ---
-                # Simplified, RFC 1123 compliant naming scheme
-                # Uses base name, phase (lower), step index, and an operation counter
-                cr_name = f"{base_name}-{phase_name.lower()}-{step_index}-{operation_counter}"
+                cr_name = get_cdc_name(operation_counter)
                 # Submit CREATE task
                 future = executor.submit(create_cdc_worker, custom_api, namespace, cr_name, template_body, api_info)
                 active_cdc_queue.append(cr_name) # Add name to queue *before* checking result
@@ -388,7 +391,7 @@ def main():
         active_cdc_queue = prefill_pool(custom_api, args.pool_size, args.namespace, args.base_name, template_body, api_info, args.workers)
 
         logging.info("Pausing briefly after pool pre-fill...")
-        time.sleep(10)
+        time.sleep(120)
 
         # --- Main Load Generation Loop ---
         for i, measurement_rate in enumerate(target_rates):
@@ -438,9 +441,10 @@ def main():
         # --- Save Results ---
         if all_results_data:
             try:
-                with open(args.output_json, 'w') as f: json.dump(all_results_data, f, indent=4)
-                logging.info(f"Successfully saved results to {args.output_json}")
-            except Exception as e: logging.error(f"Failed to write results to {args.output_json}: {e}")
+                outfile = f'load_results_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+                with open(outfile, 'w') as f: json.dump(all_results_data, f, indent=4)
+                logging.info(f"Successfully saved results to {outfile}")
+            except Exception as e: logging.error(f"Failed to write results to {outfile}: {e}")
 
         # --- Removed Plotting Call ---
 
