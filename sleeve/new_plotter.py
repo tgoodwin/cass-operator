@@ -7,9 +7,9 @@ import json # To load results file
 import os
 import math # For finding min/max
 
+# Ensure these are installed: pip install matplotlib pandas prometheus-api-client requests
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-import matplotlib.dates as mdates # For formatting time axis
 import pandas as pd
 from prometheus_api_client import PrometheusConnect
 from prometheus_api_client.exceptions import PrometheusApiClientException
@@ -26,44 +26,18 @@ OPERATOR_POD_LABEL_SELECTOR = 'control-plane=controller-manager' # Label selecto
 # --- Helper Functions ---
 
 def query_prometheus_range(prom, query, start_time_dt, end_time_dt, step):
-    """
-    Queries Prometheus using datetime objects.
-
-    Args:
-        prom (PrometheusConnect): Initialized Prometheus client.
-        query (str): The PromQL query string.
-        start_time_dt (datetime): Start timestamp (datetime object, expected to be timezone-aware).
-        end_time_dt (datetime): End timestamp (datetime object, expected to be timezone-aware).
-        step (str): Query resolution step (e.g., '15s').
-
-    Returns:
-        list: The result from Prometheus, or None if an error occurred.
-    """
-    # Ensure timestamps are timezone-aware (UTC) before passing to API client or logging
-    if start_time_dt.tzinfo is None:
-        start_time_dt = start_time_dt.replace(tzinfo=datetime.timezone.utc)
-    if end_time_dt.tzinfo is None:
-        end_time_dt = end_time_dt.replace(tzinfo=datetime.timezone.utc)
-
+    """Queries Prometheus using datetime objects."""
+    if start_time_dt.tzinfo is None: start_time_dt = start_time_dt.replace(tzinfo=datetime.timezone.utc)
+    if end_time_dt.tzinfo is None: end_time_dt = end_time_dt.replace(tzinfo=datetime.timezone.utc)
     logging.debug(f"Querying: {query}")
-    # Log ISO format for human readability
     logging.debug(f"Range (ISO):   {start_time_dt.isoformat()} to {end_time_dt.isoformat()}, Step: {step}")
-
     try:
-        # Pass datetime objects directly to the client library function
-        logging.info(f"querying! Start Time: {start_time_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}, End Time: {end_time_dt.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        result = prom.custom_query_range(
-            query=query,
-            start_time=start_time_dt, # Pass datetime object
-            end_time=end_time_dt,     # Pass datetime object
-            step=step,
-        )
+        result = prom.custom_query_range(query=query, start_time=start_time_dt, end_time=end_time_dt, step=step)
         if not result: logging.warning(f"Query returned no data: {query}")
         return result
     except PrometheusApiClientException as e:
         logging.error(f"Prometheus query failed: {e}\nQuery: {query}")
         return None
-    # Catch potential type errors if non-datetime objects were somehow passed
     except AttributeError as e:
          logging.error(f"AttributeError during query (likely non-datetime passed): {e}\nQuery: {query}")
          return None
@@ -76,92 +50,133 @@ def result_to_dataframe(result, metric_name):
     data = []
     if not result or not isinstance(result, list) or len(result) == 0:
         logging.warning(f"No data or invalid format received for metric: {metric_name}")
-        # Return empty DataFrame with datetime index
         return pd.DataFrame(columns=[metric_name], index=pd.to_datetime([]))
-
     if len(result) > 1:
         labels = result[0].get('metric', {})
         logging.warning(f"Multiple series found for {metric_name}, using first series with labels: {labels}. Consider refining query labels.")
-
-    series = result[0] # Assume the first series is the one we want
+    series = result[0]
     values = series.get('values', [])
     if not values:
          logging.warning(f"First series for {metric_name} contains no values.")
          return pd.DataFrame(columns=[metric_name], index=pd.to_datetime([]))
-
     for timestamp, value in values:
         try:
-            # Prometheus timestamps are typically UTC
             dt_obj = datetime.datetime.fromtimestamp(float(timestamp), tz=datetime.timezone.utc)
             numeric_value = float(value)
-            # Handle potential Prometheus 'NaN' strings
-            if isinstance(value, str) and value.lower() == 'nan':
-                numeric_value = float('nan')
+            if isinstance(value, str) and value.lower() == 'nan': numeric_value = float('nan')
             data.append([dt_obj, numeric_value])
         except (ValueError, TypeError) as e:
-            logging.warning(f"Skipping invalid data point for {metric_name}: time={timestamp}, value={value}, error={e}")
-
+            logging.warning(f"Skipping invalid data point: time={timestamp}, value={value}, error={e}")
     if not data:
          logging.warning(f"No valid data points processed for {metric_name}.")
          return pd.DataFrame(columns=[metric_name], index=pd.to_datetime([]))
-
     df = pd.DataFrame(data, columns=['timestamp', metric_name])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True) # Ensure UTC timezone
+    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
     df = df.set_index('timestamp')
-    # Drop rows where the metric value could not be parsed as float
     df = df.dropna(subset=[metric_name])
     return df
+
+def calculate_average_metric(df, metric_name):
+    """Calculates the mean of the metric column in the DataFrame."""
+    if df.empty or metric_name not in df.columns or df[metric_name].isnull().all():
+        return None
+    return df[metric_name].mean()
+
+def load_and_process_data(json_path, prom, query_interval, step):
+    """Loads results JSON, queries Prometheus for latency metrics, returns processed data."""
+    if not json_path or not os.path.exists(json_path):
+        logging.warning(f"Results JSON file not found or not specified: {json_path}. Skipping.")
+        return None
+
+    try:
+        with open(json_path, 'r') as f:
+            experiment_results = json.load(f)
+        logging.info(f"Loaded results from {json_path}")
+    except Exception as e:
+        logging.error(f"Error loading/parsing {json_path}: {e}")
+        return None
+
+    try:
+        target_rates = sorted([float(r) for r in experiment_results.keys()])
+        if not target_rates:
+             logging.error(f"No valid rates found in {json_path}.")
+             return None
+    except ValueError:
+         logging.error(f"Could not parse rates in {json_path} as numbers.")
+         return None
+
+    logging.info(f"Processing rates from {json_path}: {target_rates}")
+
+    # --- Define PromQL Queries ---
+    common_labels = f'job="{OPERATOR_METRICS_JOB}", namespace="{OPERATOR_NAMESPACE}"'
+    controller_label = f'controller="{CONTROLLER_NAME}"'
+
+    latency_p99_query = f'histogram_quantile(0.99, sum by (le, controller) (rate(controller_runtime_reconcile_time_seconds_bucket{{{common_labels}, {controller_label}}}[{query_interval}])))'
+    latency_p95_query = f'histogram_quantile(0.95, sum by (le, controller) (rate(controller_runtime_reconcile_time_seconds_bucket{{{common_labels}, {controller_label}}}[{query_interval}])))'
+    latency_avg_query = f'(sum(rate(controller_runtime_reconcile_time_seconds_sum{{{common_labels}, {controller_label}}}[{query_interval}])) / sum(rate(controller_runtime_reconcile_time_seconds_count{{{common_labels}, {controller_label}}}[{query_interval}])))'
+
+    queries_to_fetch = {
+        "p99 Latency (s)": latency_p99_query,
+        "p95 Latency (s)": latency_p95_query,
+        "Avg Latency (s)": latency_avg_query,
+    }
+
+    # --- Fetch and Process Data for each rate ---
+    processed_data = {rate: {} for rate in target_rates}
+
+    for rate in target_rates:
+        rate_str = str(rate)
+        if rate_str not in experiment_results: continue
+
+        exp_info = experiment_results[rate_str]
+        try:
+            t_start_dt = datetime.datetime.fromtimestamp(exp_info['T_START'], tz=datetime.timezone.utc)
+            t_end_dt = datetime.datetime.fromtimestamp(exp_info['T_END'], tz=datetime.timezone.utc)
+        except (KeyError, ValueError, TypeError) as e:
+            logging.error(f"Invalid timestamp data for rate {rate} in {json_path}: {e}")
+            continue
+        if t_start_dt >= t_end_dt:
+            logging.error(f"T_START must be before T_END for rate {rate} in {json_path}.")
+            continue
+
+        logging.info(f"  Processing Rate: {rate} ops/s (Window: {t_start_dt.isoformat()} to {t_end_dt.isoformat()})")
+
+        for metric_name, query in queries_to_fetch.items():
+            result = query_prometheus_range(prom, query, t_start_dt, t_end_dt, step)
+            df = result_to_dataframe(result, metric_name)
+            avg_scalar_value = calculate_average_metric(df, metric_name)
+
+            if avg_scalar_value is not None:
+                logging.debug(f"    Avg {metric_name}: {avg_scalar_value:.4f}")
+                processed_data[rate][metric_name] = avg_scalar_value
+            else:
+                logging.warning(f"    Could not calculate average for {metric_name} at rate {rate}")
+                processed_data[rate][metric_name] = None
+
+    return processed_data
+
 
 # --- Main Script ---
 
 def main():
-    parser = argparse.ArgumentParser(description="Query Prometheus and plot overall reconcile latency over time.")
+    parser = argparse.ArgumentParser(description="Compare reconcile latency vs throughput for multiple experiment runs.")
     parser.add_argument("--prometheus-url", default="http://localhost:9090", help="URL of the Prometheus server.")
-    parser.add_argument("--results-json", default="load_results.json", help="Path to the JSON file containing experiment timestamps.")
-    parser.add_argument("--step", default="15s", help="Query resolution step (e.g., '15s', '1m'). Should be >= scrape interval.")
+    # Arguments for different experiment results files
+    parser.add_argument("--baseline-json", help="Path to the JSON results file for the baseline run.")
+    parser.add_argument("--instrumented-json", help="Path to the JSON results file for the instrumented run.")
+    parser.add_argument("--optimized-json", help="Path to the JSON results file for the optimized run.")
+
+    parser.add_argument("--step", default="15s", help="Query resolution step (e.g., '15s', '1m').")
     parser.add_argument("--query-interval", default="1m", help="Interval used within PromQL rate/histogram functions (e.g., '1m', '2m').")
-    parser.add_argument("--output-prefix", default="overall_latency_plot", help="Prefix for output plot filename (e.g., 'overall_latency_plot.png').")
+    parser.add_argument("--output-prefix", default="comparison_plot", help="Prefix for output plot filenames (e.g., 'comparison_plot_p99.png').")
     parser.add_argument("--show-plots", action='store_true', help="Show plots interactively instead of just saving.")
 
     args = parser.parse_args()
 
-    # --- Load Experiment Data ---
-    if not os.path.exists(args.results_json):
-        logging.error(f"Results JSON file not found: {args.results_json}")
+    # Check if at least one results file is provided
+    if not any([args.baseline_json, args.instrumented_json, args.optimized_json]):
+        logging.error("Must provide at least one results JSON file (--baseline-json, --instrumented-json, or --optimized-json).")
         sys.exit(1)
-
-    try:
-        with open(args.results_json, 'r') as f:
-            experiment_results = json.load(f)
-        logging.info(f"Loaded results from {args.results_json}")
-    except Exception as e:
-        logging.error(f"Error loading/parsing {args.results_json}: {e}")
-        sys.exit(1)
-
-    # --- Determine Overall Time Range ---
-    min_start_epoch = math.inf
-    max_end_epoch = 0
-    if not experiment_results:
-        logging.error("Results JSON is empty. Cannot determine time range.")
-        sys.exit(1)
-
-    for rate_str, data in experiment_results.items():
-        try:
-            min_start_epoch = min(min_start_epoch, data['T_START'])
-            max_end_epoch = max(max_end_epoch, data['T_END'])
-        except (KeyError, TypeError) as e:
-            logging.warning(f"Skipping invalid entry for rate '{rate_str}' in JSON: {e}")
-            continue
-
-    if min_start_epoch == math.inf or max_end_epoch == 0 or min_start_epoch >= max_end_epoch:
-        logging.error("Could not determine valid overall time range from results JSON.")
-        sys.exit(1)
-
-    # Convert epoch to datetime objects (UTC)
-    overall_start_time = datetime.datetime.fromtimestamp(min_start_epoch, tz=datetime.timezone.utc)
-    overall_end_time = datetime.datetime.fromtimestamp(max_end_epoch, tz=datetime.timezone.utc)
-    logging.info(f"Overall experiment time range: {overall_start_time.isoformat()} to {overall_end_time.isoformat()}")
-
 
     # --- Connect to Prometheus ---
     try:
@@ -175,80 +190,69 @@ def main():
         logging.error(f"Failed to initialize Prometheus connection: {e}")
         sys.exit(1)
 
-    # --- Define PromQL Queries ---
-    # Ensure these labels match your environment
-    common_labels = f'job="{OPERATOR_METRICS_JOB}", namespace="{OPERATOR_NAMESPACE}"'
-    controller_label = f'controller="{CONTROLLER_NAME}"'
-    query_interval = args.query_interval
+    # --- Load and Process Data for Each Run ---
+    run_data = {}
+    if args.baseline_json:
+        logging.info("--- Processing Baseline Run ---")
+        run_data["Baseline"] = load_and_process_data(args.baseline_json, prom, args.query_interval, args.step)
+    if args.instrumented_json:
+        logging.info("--- Processing Instrumented Run ---")
+        run_data["Instrumented"] = load_and_process_data(args.instrumented_json, prom, args.query_interval, args.step)
+    if args.optimized_json:
+        logging.info("--- Processing Optimized Run ---")
+        run_data["Optimized"] = load_and_process_data(args.optimized_json, prom, args.query_interval, args.step)
 
-    # Latency Queries (calculating time series)
-    latency_p99_query = f'histogram_quantile(0.99, sum by (le, controller) (rate(controller_runtime_reconcile_time_seconds_bucket{{{common_labels}, {controller_label}}}[{query_interval}])))'
-    latency_p95_query = f'histogram_quantile(0.95, sum by (le, controller) (rate(controller_runtime_reconcile_time_seconds_bucket{{{common_labels}, {controller_label}}}[{query_interval}])))'
-    latency_avg_query = f'(sum(rate(controller_runtime_reconcile_time_seconds_sum{{{common_labels}, {controller_label}}}[{query_interval}])) / sum(rate(controller_runtime_reconcile_time_seconds_count{{{common_labels}, {controller_label}}}[{query_interval}])))'
+    # --- Generate Plots ---
+    logging.info("Generating comparison plots...")
 
-    queries_to_fetch = {
-        "p99 Latency (s)": latency_p99_query,
-        "p95 Latency (s)": latency_p95_query,
-        "Avg Latency (s)": latency_avg_query,
+    metrics_to_plot = ["Avg Latency (s)", "p95 Latency (s)", "p99 Latency (s)"]
+    run_styles = {
+        "Baseline": {'marker': '^', 'linestyle': '--', 'color': 'green'},
+        "Instrumented": {'marker': 's', 'linestyle': '-', 'color': 'red'},
+        "Optimized": {'marker': 'o', 'linestyle': '-', 'color': 'blue'}
     }
 
-    # --- Fetch and Process Data ---
-    latency_dataframes = {}
+    for metric in metrics_to_plot:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        has_data = False
 
-    logging.info(f"Querying Prometheus for the full range...")
-    for metric_name, query in queries_to_fetch.items():
-        # Pass datetime objects directly to the query function
-        result = query_prometheus_range(prom, query, overall_start_time, overall_end_time, args.step)
-        df = result_to_dataframe(result, metric_name)
-        if not df.empty:
-            logging.info(f"  Successfully fetched data for {metric_name} ({len(df)} points)")
-            latency_dataframes[metric_name] = df
-        else:
-             logging.warning(f"  No data returned or processed for {metric_name}")
-             # Create an empty dataframe to avoid plotting errors later
-             latency_dataframes[metric_name] = pd.DataFrame(columns=[metric_name], index=pd.to_datetime([]))
+        for run_name, data in run_data.items():
+            if data: # Check if data was loaded successfully
+                rates = sorted(data.keys())
+                values = [data[r].get(metric) for r in rates]
+                # Filter out None values before plotting
+                plot_rates = [r for r, v in zip(rates, values) if v is not None]
+                plot_values = [v for v in values if v is not None]
 
+                if plot_rates: # Only plot if there's valid data
+                    style = run_styles.get(run_name, {'marker': 'x', 'linestyle': ':'}) # Default style
+                    ax.plot(plot_rates, plot_values, label=run_name, **style)
+                    has_data = True
 
-    # --- Generate Plot ---
-    logging.info("Generating latency plot...")
-    fig, ax = plt.subplots(figsize=(14, 7)) # Wider figure for time series
+        if not has_data:
+            logging.warning(f"No data found to plot for metric '{metric}'. Skipping plot generation.")
+            plt.close(fig) # Close the empty figure
+            continue
 
-    # Plot each latency metric time series
-    # Check if DataFrame exists and is not empty before plotting
-    if "p99 Latency (s)" in latency_dataframes and not latency_dataframes["p99 Latency (s)"].empty:
-        ax.plot(latency_dataframes["p99 Latency (s)"].index, latency_dataframes["p99 Latency (s)"]["p99 Latency (s)"], label='p99 Latency', marker='.', linestyle='-')
-    if "p95 Latency (s)" in latency_dataframes and not latency_dataframes["p95 Latency (s)"].empty:
-        ax.plot(latency_dataframes["p95 Latency (s)"].index, latency_dataframes["p95 Latency (s)"]["p95 Latency (s)"], label='p95 Latency', marker='.', linestyle='-')
-    if "Avg Latency (s)" in latency_dataframes and not latency_dataframes["Avg Latency (s)"].empty:
-        ax.plot(latency_dataframes["Avg Latency (s)"].index, latency_dataframes["Avg Latency (s)"]["Avg Latency (s)"], label='Avg Latency', marker='.', linestyle='-')
-
-    # Configure the plot
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Reconcile Latency (seconds)")
-    ax.set_title("Overall Controller Reconcile Latency During Load Test")
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-    # Only show legend if there's something to label
-    if any(not df.empty for df in latency_dataframes.values()):
+        # Configure the plot
+        metric_short_name = metric.split(" ")[0] # e.g., "Avg", "p95", "p99"
+        ax.set_xlabel("Offered Load (Ops / second)")
+        ax.set_ylabel(f"Avg Reconcile Latency ({metric_short_name}) (seconds)")
+        ax.set_title(f"Comparison: {metric_short_name} Reconcile Latency vs. Offered Load")
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         ax.legend()
-    else:
-        logging.warning("No latency data was plotted.")
+        ax.set_xlim(left=0)
+        ax.set_ylim(bottom=0)
+        # Optional log scale for latency
+        # ax.set_yscale('log')
 
-
-    # Format the X-axis to show time clearly
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S', tz=datetime.timezone.utc)) # Show HH:MM:SS in UTC
-    fig.autofmt_xdate() # Rotate date labels for better fit
-
-    # Optional: Set y-axis to log scale if latency varies greatly
-    # ax.set_yscale('log')
-    ax.set_ylim(bottom=0) # Ensure y-axis starts at 0
-
-    fig.tight_layout()
-    latency_filename = f"{args.output_prefix}_overall.png"
-    logging.info(f"Saving latency plot to {latency_filename}")
-    fig.savefig(latency_filename)
+        fig.tight_layout()
+        filename = f"{args.output_prefix}_{metric_short_name.lower()}_comparison.png"
+        logging.info(f"Saving plot to {filename}")
+        fig.savefig(filename)
 
     if args.show_plots:
-        logging.info("Displaying plot...")
+        logging.info("Displaying plots...")
         plt.show()
 
     logging.info("Script finished.")
