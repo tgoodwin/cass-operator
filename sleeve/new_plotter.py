@@ -291,7 +291,7 @@ def main():
     run_styles_load = { # Keep original markers/styles for this plot type
         "Baseline": {'marker': '^', 'linestyle': '--', 'color': 'green'},
         "Instrumented": {'marker': 's', 'linestyle': '-', 'color': 'red'},
-        "Optimized": {'marker': 'o', 'linestyle': '-', 'color': 'blue'}
+        # "Optimized": {'marker': 'o', 'linestyle': '-', 'color': 'blue'}
     }
     for metric in latency_metrics:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -338,7 +338,7 @@ def main():
     run_styles_time = { # Styles for time series plots (consistent marker)
         "Baseline": {'linestyle': '--', 'color': 'green', 'marker': '.'},
         "Instrumented": {'linestyle': '-', 'color': 'red', 'marker': '.'},
-        "Optimized": {'linestyle': '-', 'color': 'blue', 'marker': '.'}
+        # "Optimized": {'linestyle': '-', 'color': 'blue', 'marker': '.'}
     }
 
     # First pass: find max values for scaling
