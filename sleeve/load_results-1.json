@@ -1,0 +1,74 @@
+{
+    "1.0": {
+        "T_START": 1746306743.435016,
+        "T_END": 1746307043.435016,
+        "warmup_creates_submitted": 15,
+        "warmup_deletes_submitted": 15,
+        "measurement_creates_submitted": 150,
+        "measurement_deletes_submitted": 150,
+        "target_pool_size": 100
+    },
+    "2.0": {
+        "T_START": 1746307133.454617,
+        "T_END": 1746307433.454617,
+        "warmup_creates_submitted": 30,
+        "warmup_deletes_submitted": 30,
+        "measurement_creates_submitted": 300,
+        "measurement_deletes_submitted": 300,
+        "target_pool_size": 100
+    },
+    "4.0": {
+        "T_START": 1746307523.48786,
+        "T_END": 1746307823.48786,
+        "warmup_creates_submitted": 60,
+        "warmup_deletes_submitted": 60,
+        "measurement_creates_submitted": 600,
+        "measurement_deletes_submitted": 600,
+        "target_pool_size": 100
+    },
+    "8.0": {
+        "T_START": 1746307913.500695,
+        "T_END": 1746308213.500695,
+        "warmup_creates_submitted": 120,
+        "warmup_deletes_submitted": 120,
+        "measurement_creates_submitted": 1200,
+        "measurement_deletes_submitted": 1200,
+        "target_pool_size": 100
+    },
+    "16.0": {
+        "T_START": 1746308303.810379,
+        "T_END": 1746308603.810379,
+        "warmup_creates_submitted": 240,
+        "warmup_deletes_submitted": 240,
+        "measurement_creates_submitted": 2400,
+        "measurement_deletes_submitted": 2400,
+        "target_pool_size": 100
+    },
+    "32.0": {
+        "T_START": 1746308697.62749,
+        "T_END": 1746308997.62749,
+        "warmup_creates_submitted": 480,
+        "warmup_deletes_submitted": 480,
+        "measurement_creates_submitted": 4800,
+        "measurement_deletes_submitted": 4800,
+        "target_pool_size": 100
+    },
+    "64.0": {
+        "T_START": 1746309087.665461,
+        "T_END": 1746309387.665461,
+        "warmup_creates_submitted": 960,
+        "warmup_deletes_submitted": 960,
+        "measurement_creates_submitted": 9600,
+        "measurement_deletes_submitted": 9600,
+        "target_pool_size": 100
+    },
+    "128.0": {
+        "T_START": 1746309495.6995971,
+        "T_END": 1746309795.6995971,
+        "warmup_creates_submitted": 1920,
+        "warmup_deletes_submitted": 1920,
+        "measurement_creates_submitted": 19200,
+        "measurement_deletes_submitted": 19200,
+        "target_pool_size": 100
+    }
+}

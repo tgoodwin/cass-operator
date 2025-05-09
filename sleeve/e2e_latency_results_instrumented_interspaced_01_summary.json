@@ -1,0 +1,31 @@
+{
+    "metadata": {
+        "run_id": "10170941-bd8e-412f-8b53-988ff699088f",
+        "timestamp_utc": "2025-05-09T19:56:41.518255+00:00",
+        "args": {
+            "n_cdcs": 100,
+            "cdc_template_yaml": "./cdc_template.yaml",
+            "namespace": "tracey",
+            "cdc_pod_label_key": "cassandra.datastax.com/datacenter",
+            "output_suffix": "instrumented_interspaced_01",
+            "inter_request_delay": 5.0,
+            "pause_between_phases": 10,
+            "timeout_creation": 600,
+            "timeout_update": 600,
+            "timeout_deletion": 600,
+            "timeout_watcher_shutdown": 10.0,
+            "skip_update_phase": false,
+            "target_pod_count_update": 2,
+            "skip_cleanup": false,
+            "debug": false
+        }
+    },
+    "phase_timestamps": {
+        "creation_phase_start_utc": "2025-05-09T19:31:19.526527+00:00",
+        "creation_phase_end_utc": "2025-05-09T19:39:35.894628+00:00",
+        "update_phase_start_utc": "2025-05-09T19:39:45.913480+00:00",
+        "update_phase_end_utc": "2025-05-09T19:48:06.746303+00:00",
+        "deletion_phase_start_utc": "2025-05-09T19:48:16.761281+00:00",
+        "deletion_phase_end_utc": "2025-05-09T19:56:37.435676+00:00"
+    }
+}

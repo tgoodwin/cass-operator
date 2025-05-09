@@ -10,15 +10,15 @@ spec:
   managementApiAuth:
     insecure: {}
   racks:
-    - name: sample-rack
-  size: 3
+    - name: sleeve
+  size: 1
   allowMultipleNodesPerWorker: true 
 
   resources:
     requests:
       # How much resources Kubernetes should reserve for the pod (affects scheduling)
-      cpu: "500m"       # Request 0.5 CPU core
-      memory: "1Gi"     # Request 1 Gibibyte of RAM
+      cpu: "50m"       # Request 0.05 CPU core
+      memory: "1Mi"     # Request 1 Gibibyte of RAM
     limits:
       # Maximum resources the pod can consume
       cpu: "1000m"      # Limit usage to 1 CPU core (throttled if exceeds)

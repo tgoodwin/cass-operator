@@ -1,0 +1,38 @@
+{
+    "1.0": {
+        "T_START": 1746386161.730879,
+        "T_END": 1746386281.730879,
+        "warmup_creates_submitted": 15,
+        "warmup_deletes_submitted": 15,
+        "measurement_creates_submitted": 60,
+        "measurement_deletes_submitted": 60,
+        "target_pool_size": 100
+    },
+    "2.0": {
+        "T_START": 1746386372.6961348,
+        "T_END": 1746386492.6961348,
+        "warmup_creates_submitted": 30,
+        "warmup_deletes_submitted": 30,
+        "measurement_creates_submitted": 120,
+        "measurement_deletes_submitted": 120,
+        "target_pool_size": 100
+    },
+    "4.0": {
+        "T_START": 1746386583.336152,
+        "T_END": 1746386703.336152,
+        "warmup_creates_submitted": 60,
+        "warmup_deletes_submitted": 60,
+        "measurement_creates_submitted": 240,
+        "measurement_deletes_submitted": 240,
+        "target_pool_size": 100
+    },
+    "8.0": {
+        "T_START": 1746386794.74894,
+        "T_END": 1746386914.74894,
+        "warmup_creates_submitted": 120,
+        "warmup_deletes_submitted": 120,
+        "measurement_creates_submitted": 480,
+        "measurement_deletes_submitted": 480,
+        "target_pool_size": 100
+    }
+}

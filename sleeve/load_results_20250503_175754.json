@@ -1,0 +1,11 @@
+{
+    "1.0": {
+        "T_START": 1746319901.2747462,
+        "T_END": 1746320201.2747462,
+        "warmup_creates_submitted": 15,
+        "warmup_deletes_submitted": 15,
+        "measurement_creates_submitted": 150,
+        "measurement_deletes_submitted": 150,
+        "target_pool_size": 100
+    }
+}

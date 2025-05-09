@@ -10,25 +10,20 @@ import pandas as pd
 from prometheus_api_client import PrometheusConnect
 from prometheus_api_client.exceptions import PrometheusApiClientException
 
-# --- Configuration ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- Placeholder Values (FILL THESE IN!) ---
 # Details for Operator Metrics
-OPERATOR_METRICS_JOB = "cass-operator-controller-manager-metrics-service" # e.g., "cass-operator-controller-manager-metrics-service"
+OPERATOR_METRICS_JOB = "cass-operator-controller-manager-metrics-service"
 OPERATOR_NAMESPACE = "cass-operator"       # e.g., "cass-operator-system"
-# Name of the primary controller you want to track reconcile metrics for
 CONTROLLER_NAME = "cassandradatacenter_controller"      # e.g., "cassandradatacenter"
 # Name of the container within the operator pod
 OPERATOR_CONTAINER_NAME = "manager"    # e.g., "manager"
 
 # Details for Node Exporter Metrics
 NODE_EXPORTER_JOB = "node-exporter"     # e.g., "node-exporter"
-# Label used by node-exporter to identify the node (often 'instance' or 'node')
 NODE_INSTANCE_LABEL = "instance"
 # Value of the NODE_INSTANCE_LABEL for the dedicated node your operator runs on
 DEDICATED_NODE_NAME = "172.20.0.2:9100" # e.g., "10.0.1.5:9100" or "ip-10-0-1-5.ec2.internal"
-# --- End Placeholder Values ---
 
 
 def parse_timestamp(ts_str):
@@ -109,35 +104,29 @@ def main():
     parser.add_argument("--prometheus-url", default="http://localhost:9090", help="URL of the Prometheus server.")
     # Removed --experiments, --starts, --ends arguments
     parser.add_argument("--step", default="5s", help="Query resolution step (e.g., '15s', '1m').")
-    parser.add_argument("--latency-metric", default="p95", choices=['p95', 'p99', 'avg'], help="Which reconcile latency metric to plot (p95, p99, avg).")
+    parser.add_argument("--latency-metric", default="avg", choices=['p95', 'p99', 'avg'], help="Which reconcile latency metric to plot (p95, p99, avg).")
     parser.add_argument("--output", help="Output file name to save the plot (e.g., plot.png). Shows plot if not specified.")
 
     args = parser.parse_args()
 
-    # --- Hardcoded Experiment Details (EDIT THIS LIST) ---
     experiments_to_run = [
         {
             "name": "baseline",
-            "start_str": "2025-04-29T23:10:10+00:00", # Replace with actual T_START
-            "end_str": "2025-04-29T23:15:10+00:00"    # Replace with actual T_END
+            "start_str": "2025-04-30T01:46:47+00:00",
+            "end_str": "2025-04-30T01:51:47+00:00"
         },
-        # {
-        #     "name": "instrumented",
-        #     "start_str": "2025-04-29T16:00:00Z", # Replace with actual T_START
-        #     "end_str": "2025-04-29T16:15:00Z"    # Replace with actual T_END
-        # },
-        # {
-        #     "name": "optimized",
-        #     "start_str": "2025-04-29T16:30:00Z", # Replace with actual T_START
-        #     "end_str": "2025-04-29T16:45:00Z"    # Replace with actual T_END
-        # },
-        # Add more experiments here as needed
-        # {"name": "run4", "start_str": "...", "end_str": "..."},
+        {
+            "name": "instrumented",
+            "start_str": "2025-04-30T01:56:19+00:00",
+            "end_str": "2025-04-30T02:01:19+00:00"
+        },
+        {
+            "name": "optimized",
+            "start_str": "2025-04-30T02:05:41+00:00",
+            "end_str": "2025-04-30T02:10:41+00:00"
+        },
     ]
-    # --- End Hardcoded Experiment Details ---
 
-
-    # --- Connect to Prometheus ---
     try:
         logging.info(f"Connecting to Prometheus at {args.prometheus_url}")
         prom = PrometheusConnect(url=args.prometheus_url, disable_ssl=True)
@@ -149,8 +138,6 @@ def main():
         logging.error(f"Failed to initialize Prometheus connection: {e}")
         sys.exit(1)
 
-    # --- Define Queries ---
-    # (Queries remain the same as before)
     reconcile_rate_query = f"""
     sum(rate(controller_runtime_reconcile_total{{
         job="{OPERATOR_METRICS_JOB}",
@@ -182,13 +169,13 @@ def main():
              job="{OPERATOR_METRICS_JOB}",
              namespace="{OPERATOR_NAMESPACE}",
              controller="{CONTROLLER_NAME}"
-         }}[5m]))
+         }}[1m]))
          /
          sum(rate(controller_runtime_reconcile_time_seconds_count{{
              job="{OPERATOR_METRICS_JOB}",
              namespace="{OPERATOR_NAMESPACE}",
              controller="{CONTROLLER_NAME}"
-         }}[5m]))
+         }}[1m]))
          """
     else:
         latency_query = f"""
@@ -197,13 +184,13 @@ def main():
             job="{OPERATOR_METRICS_JOB}",
             namespace="{OPERATOR_NAMESPACE}",
             controller="{CONTROLLER_NAME}"
-          }}[5m])
+          }}[1m])
         ))
         """
 
     queries = {
         "Reconcile Rate (inv/s)": reconcile_rate_query,
-        "Memory Usage (bytes)": memory_usage_query,
+        "Node Memory Usage (bytes)": memory_usage_query,
         "Node CPU Usage (%)": cpu_usage_query,
         f"Reconcile Latency ({args.latency_metric.upper()}) (s)": latency_query,
     }

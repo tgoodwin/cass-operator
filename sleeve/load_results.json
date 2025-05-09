@@ -1,0 +1,26 @@
+{
+    "40.0": {
+        "T_START": 1746222848.743642,
+        "T_END": 1746223088.743642,
+        "warmup_requests_submitted": 1200,
+        "measurement_requests_submitted": 9600
+    },
+    "80.0": {
+        "T_START": 1746223149.447297,
+        "T_END": 1746223389.447297,
+        "warmup_requests_submitted": 2400,
+        "measurement_requests_submitted": 19200
+    },
+    "160.0": {
+        "T_START": 1746223463.609329,
+        "T_END": 1746223703.609329,
+        "warmup_requests_submitted": 4800,
+        "measurement_requests_submitted": 38401
+    },
+    "320.0": {
+        "T_START": 1746223921.837152,
+        "T_END": 1746224161.837152,
+        "warmup_requests_submitted": 9600,
+        "measurement_requests_submitted": 76801
+    }
+}

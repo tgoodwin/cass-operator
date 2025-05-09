@@ -1,0 +1,9 @@
+{
+    "1.0": {
+        "T_START": 1746486482.980238,
+        "T_END": 1746486782.980238,
+        "measurement_creates_submitted": 150,
+        "measurement_deletes_submitted": 150,
+        "target_pool_size": 100
+    }
+}

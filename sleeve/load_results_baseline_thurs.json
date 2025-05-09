@@ -1,0 +1,62 @@
+{
+    "10.0": {
+        "T_START": 1746148713.558458,
+        "T_END": 1746149013.558458,
+        "warmup_requests_submitted": 300,
+        "measurement_requests_submitted": 3001
+    },
+    "20.0": {
+        "T_START": 1746149073.6078598,
+        "T_END": 1746149373.6078598,
+        "warmup_requests_submitted": 600,
+        "measurement_requests_submitted": 6000
+    },
+    "30.0": {
+        "T_START": 1746149433.6724648,
+        "T_END": 1746149733.6724648,
+        "warmup_requests_submitted": 900,
+        "measurement_requests_submitted": 9000
+    },
+    "40.0": {
+        "T_START": 1746149793.70513,
+        "T_END": 1746150093.70513,
+        "warmup_requests_submitted": 1200,
+        "measurement_requests_submitted": 12000
+    },
+    "50.0": {
+        "T_START": 1746150154.3836968,
+        "T_END": 1746150454.3836968,
+        "warmup_requests_submitted": 1500,
+        "measurement_requests_submitted": 15000
+    },
+    "60.0": {
+        "T_START": 1746150514.40904,
+        "T_END": 1746150814.40904,
+        "warmup_requests_submitted": 1800,
+        "measurement_requests_submitted": 18000
+    },
+    "70.0": {
+        "T_START": 1746150916.5634382,
+        "T_END": 1746151216.5634382,
+        "warmup_requests_submitted": 2100,
+        "measurement_requests_submitted": 21000
+    },
+    "80.0": {
+        "T_START": 1746151302.487544,
+        "T_END": 1746151602.487544,
+        "warmup_requests_submitted": 2400,
+        "measurement_requests_submitted": 24000
+    },
+    "90.0": {
+        "T_START": 1746151662.507905,
+        "T_END": 1746151962.507905,
+        "warmup_requests_submitted": 2700,
+        "measurement_requests_submitted": 27001
+    },
+    "100.0": {
+        "T_START": 1746152024.930258,
+        "T_END": 1746152324.930258,
+        "warmup_requests_submitted": 3000,
+        "measurement_requests_submitted": 30000
+    }
+}

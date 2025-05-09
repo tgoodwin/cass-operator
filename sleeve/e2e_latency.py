@@ -720,7 +720,7 @@ async def main(args):
         sys.exit(1)
 
     test_run_id = str(uuid.uuid4())
-    logging.info(f"Starting E2E Latency Test. Run ID: {test_run_id}, N = {args.n_cdcs}, Delay = {args.inter_creation_delay}s")
+    logging.info(f"Starting E2E Latency Test. Run ID: {test_run_id}, N = {args.n_cdcs}, Delay = {args.inter_request_delay}s")
 
     phase_timestamps = {
         "run_id": test_run_id,
@@ -762,9 +762,9 @@ async def main(args):
         task = asyncio.create_task(coro)
         creation_task_futures.append(task)
 
-        if args.inter_creation_delay > 0 and i < args.n_cdcs - 1:
-            logging.debug(f"Sleeping for {args.inter_creation_delay}s before next creation task.")
-            await asyncio.sleep(args.inter_creation_delay)
+        if args.inter_request_delay > 0 and i < args.n_cdcs - 1:
+            logging.debug(f"Sleeping for {args.inter_request_delay}s before next creation task.")
+            await asyncio.sleep(args.inter_request_delay)
 
     logging.info(f"Launched {len(creation_task_futures)} creation tasks. Waiting for completion...")
 
@@ -815,7 +815,8 @@ async def main(args):
                  task = asyncio.create_task(coro)
                  update_tasks.append(task)
                  # Optional: Add inter-update delay here if needed
-                 # await asyncio.sleep(args.inter_update_delay)
+                 logging.debug(f"Sleeping for {args.inter_request_delay}s before next update task.")
+                 await asyncio.sleep(args.inter_request_delay)
 
             logging.info(f"Launched {len(update_tasks)} update tasks. Waiting for completion...")
             update_completed_count = 0
@@ -870,6 +871,9 @@ async def main(args):
             )
             task = asyncio.create_task(coro)
             deletion_tasks.append(task)
+            # Optional: Add inter-deletion delay here if needed
+            logging.debug(f"Sleeping for {args.inter_request_delay}s before next deletion task.")
+            await asyncio.sleep(args.inter_request_delay)
 
         logging.info(f"Launched {len(deletion_tasks)} deletion tasks. Waiting for completion...")
 
@@ -992,8 +996,8 @@ if __name__ == "__main__":
     )
     # --- Timing arguments ---
     parser.add_argument(
-        "--inter-creation-delay", type=float, default=0.0,
-        help="Delay in seconds between initiating each CDC creation task (default: 0.0)."
+        "--inter-request-delay", type=float, default=0.0,
+        help="Delay in seconds between initiating each CDC request (default: 0.0)."
     )
     parser.add_argument(
         "--pause-between-phases", type=int, default=30,
@@ -1042,7 +1046,7 @@ if __name__ == "__main__":
     if not cli_args.cdc_pod_label_key.strip():
         logging.error("--cdc-pod-label-key cannot be empty.")
         sys.exit(1)
-    if cli_args.inter_creation_delay < 0:
+    if cli_args.inter_request_delay < 0:
         logging.error("--inter-creation-delay cannot be negative.")
         sys.exit(1)
     if cli_args.pause_between_phases < 0:

@@ -1,0 +1,16 @@
+{
+    "1.0": {
+        "T_START": 1746471829.758085,
+        "T_END": 1746472129.758085,
+        "measurement_creates_submitted": 150,
+        "measurement_deletes_submitted": 150,
+        "target_pool_size": 100
+    },
+    "2.0": {
+        "T_START": 1746472294.223868,
+        "T_END": 1746472594.223868,
+        "measurement_creates_submitted": 300,
+        "measurement_deletes_submitted": 300,
+        "target_pool_size": 100
+    }
+}
