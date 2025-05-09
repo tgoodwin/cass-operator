@@ -211,7 +211,7 @@ uninstall: manifests ## Uninstall CRDs from the K8s cluster specified in ~/.kube
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=k8ssandra/cass-operator:1.24
+	cd config/manager && $(KUSTOMIZE) edit set image ${SLEEVE_IMG}
 	LOG_IMG=${LOG_IMG} yq eval -i '.images.system-logger = env(LOG_IMG)' config/manager/image_config.yaml
 	kubectl apply --force-conflicts --server-side -k config/deployments/cluster
 
@@ -373,6 +373,9 @@ CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
 FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
 endif
+
+SLEEVE_SUFFIX ?= baseline-metrics
+SLEEVE_IMG ?= k8ssandra/cass-operator:1.24-$(SLEEVE_SUFFIX)
 
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:
